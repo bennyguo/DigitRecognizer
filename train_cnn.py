@@ -4,35 +4,56 @@ import tensorflow as tf
 
 from dataset import DataSet
 from logger import Logger
+from constant import MODEL_FILE_BASE
 
 
 def weight_variable(shape):
   initial = tf.truncated_normal(shape, stddev=0.01)
   return tf.Variable(initial)
 
+
 def bias_variable(shape):
   initial = tf.constant(0.01, shape=shape)
   return tf.Variable(initial)
 
+
 def conv2d(x, W):
   return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
 
 def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
 
+def batchTest(test_data, sess):
+    iter = 0
+    batch_size = 1000
+    test_data_size = test_data.shape[0]
+    result = np.array([])
+    while True:
+        begin = iter * batch_size
+        end = begin + batch_size
+        if begin >= test_data_size:
+            break
+        else:
+            batch_features = test_data[begin:end]
+            pred = sess.run(prediction, feed_dict={x: batch_features, keep_prob: 1.0})
+            result = np.append(result, pred)
+            iter += 1
+    return np.int8(result)
+
 MODEL_NAME = 'cnn'
 VALIDATE_RATIO = 0.1
 LEARNING_RATE = 1e-4
 BATCH_SIZE = 100
-TRAINING_ITER = 10000
+TRAINING_EPOCH = 100
 KEEP_PROB = 0.5
-dataset = DataSet(VALIDATE_RATIO)
+dataset = DataSet()
 TRAIN_DATA_SIZE = dataset.train_data_size
 logger = Logger(MODEL_NAME)
 
-MODEL_INFO = 'validation ratio: %f\ntrain data size: %d\nbatch size: %d\nlearning rate: %f\ntotal iterations: %d\nkeep prob: %f\n' % (VALIDATE_RATIO, TRAIN_DATA_SIZE, BATCH_SIZE, LEARNING_RATE, TRAINING_ITER, KEEP_PROB)
+MODEL_INFO = 'validation ratio: %f\ntrain data size: %d\nbatch size: %d\nlearning rate: %f\ntotal epoches: %d\nkeep prob: %f\n' % (VALIDATE_RATIO, TRAIN_DATA_SIZE, BATCH_SIZE, LEARNING_RATE, TRAINING_EPOCH, KEEP_PROB)
 logger.log('==========================================\n' + MODEL_INFO)
 
 x = tf.placeholder(tf.float32, shape=[None, 784], name='x')
@@ -71,6 +92,8 @@ cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_
 correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
+prediction = tf.argmax(y, 1)
+
 train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
 
 saver = tf.train.Saver()
@@ -78,18 +101,24 @@ init = tf.global_variables_initializer()
 sess = tf.Session()
 sess.run(init)
 
-for i in range(TRAINING_ITER):
-  labels, features = dataset.nextBatch(BATCH_SIZE)
-  _, loss = sess.run([train_step, cross_entropy], feed_dict={x: features, y_: labels, keep_prob: KEEP_PROB})
-  if i % 100 == 0:
-      #ac_train = sess.run(accuracy, feed_dict={x: dataset.train_features, y_: dataset.train_labels, keep_prob: 1.0})
-      ac_validate = sess.run(accuracy, feed_dict={x: dataset.validate_features, y_: dataset.validate_labels, keep_prob: 1.0})
-      #print 'iteration %d: training data accuracy %f, validation data accuracy %f' % (i, ac_train, ac_validate)
-      #logger.log('iteration %d: training data accuracy %f, validation data accuracy %f\n' % (i, ac_train, ac_validate))
-      print 'iteration %d: validation data accuracy %f' % (i, ac_validate)
-      logger.log('iteration %d: validation data accuracy %f\n' % (i, ac_validate))
+global_iter = 0
+for i in range(TRAINING_EPOCH):
+    for labels, features in dataset.trainBatches(BATCH_SIZE):
+        _, loss = sess.run([train_step, cross_entropy], feed_dict={x: features, y_: labels, keep_prob: KEEP_PROB})
+        if global_iter % 100 == 0:
+            print 'iteration %d: loss %f' % (global_iter, loss)
+        global_iter += 1
+
+    ac_validate = sess.run(accuracy, feed_dict={x: dataset.validate_features, y_: dataset.validate_labels, keep_prob: 1.0})
+    print 'epoch %d: validation data accuracy %f' % (i, ac_validate)
+    logger.log('Epoch %d: validation data accuracy %f\n' % (i, ac_validate))
 
 ac = sess.run(accuracy, feed_dict={x: dataset.validate_features, y_: dataset.validate_labels, keep_prob: 1.0})
-print 'Validation data accuracy: %f' % ac
-logger.log('done. validation data accuracy %f\n' % ac)
-saved_file = saver.save(sess, 'model/' + MODEL_NAME)
+print 'Final validation data accuracy: %f' % ac
+logger.log('Done. Validation data accuracy %f\n' % ac)
+
+test_features = dataset.testData()
+pred = batchTest(dataset.test_features, sess)
+dataset.writeSubmission(pred, MODEL_NAME + '_' + str(TRAINING_EPOCH))
+
+saved_file = saver.save(sess, MODEL_FILE_BASE + MODEL_NAME)

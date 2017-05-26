@@ -1,9 +1,0 @@
-==========================================
-validation ratio: 0.100000
-train data size: 37800
-batch size: 100
-learning rate: 0.000100
-total iterations: 10000
-keep prob: 0.500000
-iteration 0: validation data accuracy 0.236667
-iteration 100: validation data accuracy 0.937857

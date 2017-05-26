@@ -5,6 +5,7 @@ import tensorflow as tf
 from dataset import DataSet
 
 MODEL_NAME = 'ann'
+TRAINING_ITER  = 100
 
 dataset = DataSet(validate_ratio=0.1)
 
@@ -22,6 +23,8 @@ cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_
 correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
+prediction = tf.argmax(y, 1)
+
 train_step = tf.train.GradientDescentOptimizer(0.1).minimize(cross_entropy)
 #train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 
@@ -30,7 +33,7 @@ init = tf.global_variables_initializer()
 sess = tf.Session()
 sess.run(init)
 
-for i in range(10001):
+for i in range(TRAINING_ITER):
   labels, features = dataset.nextBatch(100)
   _, loss = sess.run([train_step, cross_entropy], feed_dict={x: features, y_: labels})
   print 'loss %f' % loss
@@ -39,5 +42,9 @@ for i in range(10001):
       print 'iteration %d, accuracy %f' % (i, ac)
 
 print 'Accuracy: %f' % sess.run(accuracy, feed_dict={x: dataset.validate_features, y_: dataset.validate_labels})
+
+test_features = dataset.testData()
+pred = sess.run(prediction, feed_dict={x: test_features})
+dataset.writeSubmission(pred, MODEL_NAME + '_' + str(TRAINING_ITER))
 
 saved_file = saver.save(sess, 'model/' + MODEL_NAME)
