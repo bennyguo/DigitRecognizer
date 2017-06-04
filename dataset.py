@@ -1,13 +1,15 @@
 import pandas as pd
 import numpy as np
 from constant import *
-from os.path import isfile
+from os.path import isfile, exists
+from os import makedirs
 from prepare import prepare
+
 
 class DataSet():
 
-    train_labels = train_features = None
-    validate_labels = validate_features = None
+    train_labels = train_labels_origin = train_features = None
+    validate_labels = validate_labels_origin = validate_features = None
     test_features = None
 
     train_data_size = None
@@ -16,19 +18,23 @@ class DataSet():
 
     def __init__(self, expand=False):
 
+        print 'Initializing dataset ...'
         files_exist = True
         if (not isfile(TRAIN_DATA_FILE)) or (not isfile(TEST_DATA_FILE)) or (not isfile(VALIDATE_DATA_FILE)):
             files_exist = False
         if expand and (not isfile(EXPANDED_TRAIN_DATA_FILE)):
             files_exist = False
-        print 'Data file not detected, starting prepare procedure ...'
-        prepare(ORIGIN_DATA_FILE, TRAIN_DATA_FILE, VALIDATE_DATA_FILE, EXPANDED_TRAIN_DATA_FILE, VALIDATE_DATA_PROPORTION)
+        if not files_exist:
+            print 'Data file not detected, starting prepare procedure ...'
+            prepare(ORIGIN_DATA_FILE, TRAIN_DATA_FILE, VALIDATE_DATA_FILE, EXPANDED_TRAIN_DATA_FILE, VALIDATE_DATA_PROPORTION)
 
         train_data = pd.read_csv(EXPANDED_TRAIN_DATA_FILE) if expand else pd.read_csv(TRAIN_DATA_FILE)
         self.train_labels = np.uint8(pd.get_dummies(train_data['label']))
+        self.train_labels_origin = np.uint8(train_data['label'])
         self.train_features = np.uint8(train_data.drop('label', 1))
 
         validate_data = pd.read_csv(VALIDATE_DATA_FILE)
+        self.validate_labels_origin = np.uint8(validate_data['label'])
         self.validate_labels = np.uint8(pd.get_dummies(validate_data['label']))
         self.validate_features = np.uint8(validate_data.drop('label', 1))
 
@@ -39,6 +45,9 @@ class DataSet():
         self.test_data_size = self.test_features.shape[0]
 
         print 'Train data: %d, validate data: %d, test data: %d' % (self.train_data_size, self.validate_data_size, self.test_data_size)
+
+    def trainData(self):
+        return self.train_labels, self.train_features
 
     def trainBatches(self, batch_size):
         train_data_iter = 0
@@ -61,6 +70,8 @@ class DataSet():
         result = pd.DataFrame()
         result['ImageID'] = range(1, self.test_data_size + 1)
         result['Label'] = prediction
+        if not exists(SUBMISSION_FILE_BASE):
+            makedirs(SUBMISSION_FILE_BASE)
         result.to_csv(SUBMISSION_FILE_BASE + filename + '.csv', index=False)
 
 

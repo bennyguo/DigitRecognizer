@@ -1,5 +1,7 @@
 *.csv
-model
+models
+logs
+submissions
 .idea
 .DS_Store
 *.pyc
